@@ -16,6 +16,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.zip.CRC32;
 
 /**
  * 图片工具类
@@ -465,5 +466,184 @@ public class LImageUtil {
         if (bitmap != null && !bitmap.isRecycled()) {
             bitmap.recycle();
         }
+    }
+
+    // ==================== PNG DPI 相关 ====================
+
+    /**
+     * 保存 Bitmap 为 PNG 并写入 300dpi 元数据（适合打印）。
+     * <p>通过修改 PNG 的 pHYs chunk 来设置 DPI，Photoshop 等软件会正确读取。</p>
+     *
+     * @param bitmap  图片
+     * @param outFile 输出文件（建议后缀 .png）
+     * @return 是否保存成功
+     */
+    public static boolean savePng300Dpi(Bitmap bitmap, File outFile) {
+        return savePngWithDpi(bitmap, outFile, 300);
+    }
+
+    /**
+     * 保存 Bitmap 为 PNG 并写入 300dpi 元数据。
+     *
+     * @param bitmap   图片
+     * @param filePath 输出文件路径
+     * @return 是否保存成功
+     */
+    public static boolean savePng300Dpi(Bitmap bitmap, String filePath) {
+        if (filePath == null || filePath.isEmpty()) return false;
+        return savePngWithDpi(bitmap, new File(filePath), 300);
+    }
+
+    /**
+     * 保存 Bitmap 为 PNG 并写入指定 DPI 元数据。
+     * <p>通过修改 PNG 的 pHYs chunk 来设置 DPI。</p>
+     *
+     * @param bitmap  图片
+     * @param outFile 输出文件
+     * @param dpi     目标 DPI（如 300、150 等）
+     * @return 是否保存成功
+     */
+    public static boolean savePngWithDpi(Bitmap bitmap, File outFile, int dpi) {
+        if (outFile == null || bitmap == null) return false;
+        if (dpi <= 0) dpi = 300;
+
+        ByteArrayOutputStream baos = null;
+        FileOutputStream fos = null;
+        try {
+            baos = new ByteArrayOutputStream();
+            boolean ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos);
+            if (!ok) return false;
+            byte[] pngBytes = baos.toByteArray();
+
+            byte[] outBytes = upsertPngPhysChunk(pngBytes, dpi);
+
+            File parent = outFile.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            fos = new FileOutputStream(outFile);
+            fos.write(outBytes);
+            fos.flush();
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (baos != null) {
+                try { baos.close(); } catch (Exception ignored) {}
+            }
+            if (fos != null) {
+                try { fos.close(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    /**
+     * 在 PNG 字节数组中写入或更新 pHYs chunk。
+     */
+    private static byte[] upsertPngPhysChunk(byte[] pngBytes, int dpi) {
+        if (pngBytes == null || pngBytes.length < 8) return pngBytes;
+
+        final byte[] PNG_SIG = new byte[]{(byte) 137, 80, 78, 71, 13, 10, 26, 10};
+        for (int i = 0; i < PNG_SIG.length; i++) {
+            if (pngBytes[i] != PNG_SIG[i]) {
+                return pngBytes;
+            }
+        }
+
+        int pixelsPerMeter = (int) Math.round(dpi / 0.0254d);
+
+        byte[] physData = new byte[9];
+        writeIntBigEndian(physData, 0, pixelsPerMeter);
+        writeIntBigEndian(physData, 4, pixelsPerMeter);
+        physData[8] = 1; // unit: meter
+
+        byte[] typeBytes = new byte[]{'p', 'H', 'Y', 's'};
+        byte[] physChunk = buildPngChunk(typeBytes, physData);
+
+        int offset = 8;
+        int insertPosAfterIHDR = -1;
+        int existingPhysStart = -1;
+        int existingPhysTotalLen = -1;
+
+        while (offset + 8 <= pngBytes.length) {
+            int len = readIntBigEndian(pngBytes, offset);
+            if (len < 0) break;
+            if (offset + 12 + len > pngBytes.length) break;
+
+            byte t0 = pngBytes[offset + 4];
+            byte t1 = pngBytes[offset + 5];
+            byte t2 = pngBytes[offset + 6];
+            byte t3 = pngBytes[offset + 7];
+
+            int chunkTotalLen = 4 + 4 + len + 4;
+
+            if (t0 == 'I' && t1 == 'H' && t2 == 'D' && t3 == 'R') {
+                insertPosAfterIHDR = offset + chunkTotalLen;
+            } else if (t0 == 'p' && t1 == 'H' && t2 == 'Y' && t3 == 's') {
+                existingPhysStart = offset;
+                existingPhysTotalLen = chunkTotalLen;
+                break;
+            }
+
+            if (t0 == 'I' && t1 == 'E' && t2 == 'N' && t3 == 'D') {
+                break;
+            }
+
+            offset += chunkTotalLen;
+        }
+
+        if (existingPhysStart >= 0 && existingPhysTotalLen > 0) {
+            byte[] result = new byte[pngBytes.length - existingPhysTotalLen + physChunk.length];
+            System.arraycopy(pngBytes, 0, result, 0, existingPhysStart);
+            System.arraycopy(physChunk, 0, result, existingPhysStart, physChunk.length);
+            System.arraycopy(
+                    pngBytes,
+                    existingPhysStart + existingPhysTotalLen,
+                    result,
+                    existingPhysStart + physChunk.length,
+                    pngBytes.length - (existingPhysStart + existingPhysTotalLen)
+            );
+            return result;
+        }
+
+        if (insertPosAfterIHDR <= 0 || insertPosAfterIHDR > pngBytes.length) {
+            return pngBytes;
+        }
+
+        byte[] result = new byte[pngBytes.length + physChunk.length];
+        System.arraycopy(pngBytes, 0, result, 0, insertPosAfterIHDR);
+        System.arraycopy(physChunk, 0, result, insertPosAfterIHDR, physChunk.length);
+        System.arraycopy(pngBytes, insertPosAfterIHDR, result, insertPosAfterIHDR + physChunk.length, pngBytes.length - insertPosAfterIHDR);
+        return result;
+    }
+
+    private static byte[] buildPngChunk(byte[] type4, byte[] data) {
+        int dataLen = data == null ? 0 : data.length;
+        byte[] chunk = new byte[4 + 4 + dataLen + 4];
+        writeIntBigEndian(chunk, 0, dataLen);
+        System.arraycopy(type4, 0, chunk, 4, 4);
+        if (dataLen > 0) {
+            System.arraycopy(data, 0, chunk, 8, dataLen);
+        }
+        CRC32 crc32 = new CRC32();
+        crc32.update(type4);
+        if (dataLen > 0) crc32.update(data);
+        long crc = crc32.getValue();
+        writeIntBigEndian(chunk, 8 + dataLen, (int) crc);
+        return chunk;
+    }
+
+    private static int readIntBigEndian(byte[] data, int offset) {
+        return ((data[offset] & 0xFF) << 24)
+                | ((data[offset + 1] & 0xFF) << 16)
+                | ((data[offset + 2] & 0xFF) << 8)
+                | (data[offset + 3] & 0xFF);
+    }
+
+    private static void writeIntBigEndian(byte[] data, int offset, int value) {
+        data[offset] = (byte) ((value >>> 24) & 0xFF);
+        data[offset + 1] = (byte) ((value >>> 16) & 0xFF);
+        data[offset + 2] = (byte) ((value >>> 8) & 0xFF);
+        data[offset + 3] = (byte) (value & 0xFF);
     }
 }

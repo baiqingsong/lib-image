@@ -83,9 +83,56 @@ dependencies {
 | `mergeHorizontal(Bitmap, Bitmap)` | 水平拼接两张图片 |
 | `mergeVertical(Bitmap, Bitmap)` | 垂直拼接两张图片 |
 
+### DPI PNG 保存（适合打印）
+
+| 方法 | 说明 |
+|------|------|
+| `savePng300Dpi(Bitmap, File)` | 保存 PNG 并写入 300dpi 元数据 |
+| `savePng300Dpi(Bitmap, String)` | 保存 PNG 并写入 300dpi 元数据 |
+| `savePngWithDpi(Bitmap, File, int)` | 保存 PNG 并写入指定 DPI 元数据 |
+
 ### 其他
 
 | 方法 | 说明 |
 |------|------|
 | `getImageSize(String)` | 获取图片宽高（不加载到内存） |
 | `recycleBitmap(Bitmap)` | 安全回收 Bitmap |
+
+---
+
+`com.dawn.image.LImageCropper` 图片裁剪工具（纯Java，不依赖FFmpeg）
+
+使用 BitmapRegionDecoder 进行内存高效的区域解码裁剪，自动处理 EXIF 旋转，支持 JPEG/PNG/WebP。
+
+| 方法 | 说明 |
+|------|------|
+| `cropToFile(String, String, int, int, int, int)` | 按边距裁剪（top, bottom, left, right） |
+| `cropRectToFile(String, String, int, int, int, int)` | 按矩形区域裁剪（x, y, width, height） |
+
+---
+
+`com.dawn.image.LImageScaler` 图片缩放工具（纯Java，不依赖FFmpeg）
+
+通过 inSampleSize 预采样 + Canvas 高质量缩放，自动保留 EXIF 信息。
+
+| 方法 | 说明 |
+|------|------|
+| `scaleToFile(String, String, int, int)` | 缩放图片到指定尺寸并写入文件 |
+| `scaleHighQuality(Bitmap, int, int)` | 内存中高质量缩放 Bitmap |
+
+---
+
+`com.dawn.image.LFFmpegUtil` FFmpeg 图片处理工具
+
+依赖 `mobile-ffmpeg-full`，处理速度较慢但效果更好，适合高质量图片处理场景。
+
+| 方法 | 说明 |
+|------|------|
+| `cropImage(String, String, int, int, int, int)` | FFmpeg 裁剪（按边距） |
+| `scaleImage(String, String, int, int)` | FFmpeg 缩放到指定尺寸 |
+| `compressImage(String, String, int)` | FFmpeg 压缩（指定质量） |
+| `mergeGrid(String[], String, int, int, int)` | FFmpeg 网格合并多张图片 |
+| `overlay(String, String, String, int, int)` | FFmpeg 图片叠加到背景 |
+| `addPadding(String, String, int, int, int, int)` | FFmpeg 添加白色边距 |
+| `executeCommand(String)` | 执行自定义 FFmpeg 命令 |
+| `cancel()` | 取消正在执行的命令 |
