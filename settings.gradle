@@ -1,0 +1,3 @@
+rootProject.name = "lib-image"
+include ':app'
+include ':library'

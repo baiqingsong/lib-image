@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.dawn.image">
+
+    <!--
+        本库不需要声明任何权限。
+        图片处理均在内存中进行，保存文件由使用方负责权限申请。
+    -->
+
+</manifest>
