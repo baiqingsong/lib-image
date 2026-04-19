@@ -2,18 +2,17 @@ package com.dawn.image;
 
 import android.util.Log;
 
-import com.arthenica.ffmpegkit.FFmpegKit;
-import com.arthenica.ffmpegkit.FFmpegSession;
-import com.arthenica.ffmpegkit.ReturnCode;
+import com.arthenica.mobileffmpeg.Config;
+import com.arthenica.mobileffmpeg.FFmpeg;
 
 /**
  * FFmpeg 图片处理工具类。
  *
- * <p>依赖 ffmpeg-kit-full 库，提供基于 FFmpeg 的图片裁剪、缩放、压缩等操作。
+ * <p>依赖 mobile-ffmpeg-full 库，提供基于 FFmpeg 的图片裁剪、缩放、压缩等操作。
  * 相比纯 Java 的 Bitmap 操作，FFmpeg 处理速度较慢但效果更好，特别适合高质量图片处理。</p>
  *
  * <p>需要在 build.gradle 中添加依赖：
- * <pre>implementation 'com.arthenica:ffmpeg-kit-full:6.0-2'</pre>
+ * <pre>implementation 'com.arthenica:mobile-ffmpeg-full:4.4'</pre>
  * </p>
  */
 @SuppressWarnings("unused")
@@ -180,13 +179,13 @@ public final class LFFmpegUtil {
     public static boolean executeCommand(String command) {
         try {
             Log.d(TAG, "FFmpeg command: " + command);
-            FFmpegSession session = FFmpegKit.execute(command);
-            if (ReturnCode.isSuccess(session.getReturnCode())) {
+            int rc = FFmpeg.execute(command);
+            if (rc == Config.RETURN_CODE_SUCCESS) {
                 return true;
-            } else if (ReturnCode.isCancel(session.getReturnCode())) {
+            } else if (rc == Config.RETURN_CODE_CANCEL) {
                 Log.w(TAG, "FFmpeg command cancelled");
             } else {
-                Log.e(TAG, "FFmpeg command failed with rc=" + session.getReturnCode());
+                Log.e(TAG, "FFmpeg command failed with rc=" + rc);
             }
         } catch (Exception e) {
             Log.e(TAG, "FFmpeg command error", e);
@@ -198,6 +197,6 @@ public final class LFFmpegUtil {
      * 取消正在执行的 FFmpeg 命令。
      */
     public static void cancel() {
-        FFmpegKit.cancel();
+        FFmpeg.cancel();
     }
 }
