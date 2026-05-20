@@ -646,4 +646,23 @@ public class LImageUtil {
         data[offset + 2] = (byte) ((value >>> 8) & 0xFF);
         data[offset + 3] = (byte) (value & 0xFF);
     }
+
+    // ─── FFmpeg 兼容方法（转发至 LFFmpegUtil）───────────────────────────────────
+
+    /** 执行 FFmpeg 命令，返回是否成功。兼容旧版 Libimage 调用。 */
+    public static boolean ffmpegCommand(String command) {
+        return LFFmpegUtil.executeCommand(command);
+    }
+
+    /** 裁剪图片（按边距），兼容旧版 Libimage 调用。 */
+    public static boolean cropImage(String inputPath, String outputPath,
+                                    int top, int bottom, int left, int right) {
+        return LFFmpegUtil.cropImage(inputPath, outputPath, top, bottom, left, right);
+    }
+
+    /** 压缩/缩放图片到目标宽高，兼容旧版 Libimage 调用。 */
+    public static boolean compressImage(String inputPath, String outputPath,
+                                        int width, int height) {
+        return LFFmpegUtil.scaleImage(inputPath, outputPath, width, height);
+    }
 }
